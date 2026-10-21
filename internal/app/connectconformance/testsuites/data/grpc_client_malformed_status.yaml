@@ -1,0 +1,96 @@
+name: gRPC Malformed Status Metadata
+mode: TEST_MODE_CLIENT
+relevantProtocols:
+  - PROTOCOL_GRPC
+relevantCodecs:
+  - CODEC_PROTO
+relevantCompressions:
+  - COMPRESSION_IDENTITY
+# The reference server sends each input as HTTP/2 trailers.
+testCases:
+  - request:
+      testName: invalid-status
+      streamType: STREAM_TYPE_UNARY
+      requestMessages:
+        - "@type": type.googleapis.com/connectrpc.conformance.v1.UnaryRequest
+          responseDefinition:
+            rawResponse:
+              statusCode: 200
+              headers:
+                - name: content-type
+                  value: [ "application/grpc" ]
+              trailers:
+                - name: grpc-status
+                  value: [ "invalid" ]
+    otherAllowedErrorCodes:
+      - CODE_INTERNAL
+    expectedResponse:
+      error:
+        code: CODE_UNKNOWN
+
+  - request:
+      testName: bad-base64
+      streamType: STREAM_TYPE_UNARY
+      requestMessages:
+        - "@type": type.googleapis.com/connectrpc.conformance.v1.UnaryRequest
+          responseDefinition:
+            rawResponse:
+              statusCode: 200
+              headers:
+                - name: content-type
+                  value: [ "application/grpc" ]
+              trailers:
+                - name: grpc-status
+                  value: [ "16" ]
+                - name: grpc-status-details-bin
+                  value: [ "invalid@" ]
+    otherAllowedErrorCodes:
+      - CODE_INTERNAL
+    expectedResponse:
+      error:
+        code: CODE_UNAUTHENTICATED
+
+  - request:
+      testName: bad-protobuf
+      streamType: STREAM_TYPE_UNARY
+      requestMessages:
+        - "@type": type.googleapis.com/connectrpc.conformance.v1.UnaryRequest
+          responseDefinition:
+            rawResponse:
+              statusCode: 200
+              headers:
+                - name: content-type
+                  value: [ "application/grpc" ]
+              trailers:
+                - name: grpc-status
+                  value: [ "16" ]
+                - name: grpc-status-details-bin
+                  value: [ "AA==" ]
+    otherAllowedErrorCodes:
+      - CODE_INTERNAL
+    expectedResponse:
+      error:
+        code: CODE_UNAUTHENTICATED
+
+  - request:
+      testName: bad-percent
+      streamType: STREAM_TYPE_UNARY
+      requestMessages:
+        - "@type": type.googleapis.com/connectrpc.conformance.v1.UnaryRequest
+          responseDefinition:
+            rawResponse:
+              statusCode: 200
+              headers:
+                - name: content-type
+                  value: [ "application/grpc" ]
+              trailers:
+                - name: grpc-status
+                  value: [ "16" ]
+                - name: grpc-message
+                  value: [ "%" ]
+    # PROTOCOL-HTTP2.md: "implementations MUST NOT error or throw away the
+    # message"; at worst the caller gets the raw percent-encoded form.
+    expectedResponse:
+      error:
+        code: CODE_UNAUTHENTICATED
+        message: "%"
