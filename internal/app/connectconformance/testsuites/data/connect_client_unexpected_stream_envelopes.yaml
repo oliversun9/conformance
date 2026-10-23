@@ -1,0 +1,249 @@
+name: Connect Unexpected Stream Envelopes
+mode: TEST_MODE_CLIENT
+relevantProtocols:
+  - PROTOCOL_CONNECT
+relevantCompressions:
+  - COMPRESSION_IDENTITY
+# JSON so that the bodies below can be written as readable text: {} is a valid
+# empty message and \x02\x00\x00\x00\x02{} is a valid EndStreamResponse.
+relevantCodecs:
+  - CODEC_JSON
+# Each case sends status 200 with content-type application/connect+json and a
+# body whose envelope framing breaks one rule of the Connect protocol
+# reference. The spec gives the client no code for any of them, so the
+# expectations are placeholders: INTERNAL, the code the reference client reports
+# for a wire-level error, and UNIMPLEMENTED for the two client-stream cases, as
+# the existing client-stream cases expect. Bodies are written as base64 of the
+# exact bytes.
+testCases:
+  - request:
+      # Zero bytes: EOF before any envelope.
+      testName: empty-body
+      streamType: STREAM_TYPE_SERVER_STREAM
+      requestMessages:
+        - "@type": type.googleapis.com/connectrpc.conformance.v1.ServerStreamRequest
+          responseDefinition:
+            rawResponse:
+              headers:
+                - name: content-type
+                  value: [ "application/connect+json" ]
+    expectedResponse:
+      error:
+        code: CODE_INTERNAL
+  - request:
+      # \x00\x00\x00: EOF after three of the five prefix bytes.
+      testName: truncated-prefix
+      streamType: STREAM_TYPE_SERVER_STREAM
+      requestMessages:
+        - "@type": type.googleapis.com/connectrpc.conformance.v1.ServerStreamRequest
+          responseDefinition:
+            rawResponse:
+              headers:
+                - name: content-type
+                  value: [ "application/connect+json" ]
+              unary:
+                binary: "AAAA"
+    expectedResponse:
+      error:
+        code: CODE_INTERNAL
+  - request:
+      # HTTP-level content-encoding: gzip over a valid end-stream envelope, with
+      # no connect-content-encoding. The gzip magic bytes land where the
+      # envelope prefix is read.
+      testName: http-content-encoding
+      streamType: STREAM_TYPE_SERVER_STREAM
+      requestMessages:
+        - "@type": type.googleapis.com/connectrpc.conformance.v1.ServerStreamRequest
+          responseDefinition:
+            rawResponse:
+              headers:
+                - name: content-type
+                  value: [ "application/connect+json" ]
+                - name: content-encoding
+                  value: [ "gzip" ]
+              unary:
+                binary: "AgAAAAJ7fQ=="
+                compression: COMPRESSION_GZIP
+    expectedResponse:
+      error:
+        code: CODE_INTERNAL
+  - request:
+      # \x04\x00\x00\x00\x02{}: reserved flag bit 2 set.
+      testName: reserved-flag
+      streamType: STREAM_TYPE_SERVER_STREAM
+      requestMessages:
+        - "@type": type.googleapis.com/connectrpc.conformance.v1.ServerStreamRequest
+          responseDefinition:
+            rawResponse:
+              headers:
+                - name: content-type
+                  value: [ "application/connect+json" ]
+              unary:
+                binary: "BAAAAAJ7fQ=="
+    expectedResponse:
+      error:
+        code: CODE_INTERNAL
+  - request:
+      # \x80\x00\x00\x00\x10grpc-status: 0\r\n: the gRPC-Web trailer flag.
+      testName: grpc-web-trailer-flag
+      streamType: STREAM_TYPE_SERVER_STREAM
+      requestMessages:
+        - "@type": type.googleapis.com/connectrpc.conformance.v1.ServerStreamRequest
+          responseDefinition:
+            rawResponse:
+              headers:
+                - name: content-type
+                  value: [ "application/connect+json" ]
+              unary:
+                binary: "gAAAABBncnBjLXN0YXR1czogMA0K"
+    expectedResponse:
+      error:
+        code: CODE_INTERNAL
+  - request:
+      # \x01\x00\x00\x00\x02{}: compressed flag with no connect-content-encoding.
+      testName: compressed-flag-no-encoding
+      streamType: STREAM_TYPE_SERVER_STREAM
+      requestMessages:
+        - "@type": type.googleapis.com/connectrpc.conformance.v1.ServerStreamRequest
+          responseDefinition:
+            rawResponse:
+              headers:
+                - name: content-type
+                  value: [ "application/connect+json" ]
+              unary:
+                binary: "AQAAAAJ7fQ=="
+    expectedResponse:
+      error:
+        code: CODE_INTERNAL
+  - request:
+      # \x00\x00\x00\x00\x64{"greeting":, then EOF: 12 of the promised 100 bytes.
+      testName: truncated-message
+      streamType: STREAM_TYPE_SERVER_STREAM
+      requestMessages:
+        - "@type": type.googleapis.com/connectrpc.conformance.v1.ServerStreamRequest
+          responseDefinition:
+            rawResponse:
+              headers:
+                - name: content-type
+                  value: [ "application/connect+json" ]
+              unary:
+                binary: "AAAAAGR7ImdyZWV0aW5nIjo="
+    expectedResponse:
+      error:
+        code: CODE_INTERNAL
+  - request:
+      # \x00\x00\x00\x00\x00 then a valid EndStreamResponse: a zero-length JSON
+      # data message.
+      testName: empty-json-message
+      streamType: STREAM_TYPE_SERVER_STREAM
+      requestMessages:
+        - "@type": type.googleapis.com/connectrpc.conformance.v1.ServerStreamRequest
+          responseDefinition:
+            rawResponse:
+              headers:
+                - name: content-type
+                  value: [ "application/connect+json" ]
+              unary:
+                binary: "AAAAAAACAAAAAnt9"
+    expectedResponse:
+      error:
+        code: CODE_INTERNAL
+  - request:
+      # \x00\x00\x00\x00\x02{}, then EOF: no EndStreamResponse.
+      testName: no-end-stream
+      streamType: STREAM_TYPE_SERVER_STREAM
+      requestMessages:
+        - "@type": type.googleapis.com/connectrpc.conformance.v1.ServerStreamRequest
+          responseDefinition:
+            rawResponse:
+              headers:
+                - name: content-type
+                  value: [ "application/connect+json" ]
+              unary:
+                binary: "AAAAAAJ7fQ=="
+    expectedResponse:
+      payloads:
+        - { }
+      error:
+        code: CODE_INTERNAL
+  - request:
+      # \x02\x00\x00\x00\x02{}\x00\x00\x00\x00\x02{}: a data envelope after the
+      # EndStreamResponse.
+      testName: end-stream-not-last
+      streamType: STREAM_TYPE_SERVER_STREAM
+      requestMessages:
+        - "@type": type.googleapis.com/connectrpc.conformance.v1.ServerStreamRequest
+          responseDefinition:
+            rawResponse:
+              headers:
+                - name: content-type
+                  value: [ "application/connect+json" ]
+              unary:
+                binary: "AgAAAAJ7fQAAAAACe30="
+    expectedResponse:
+      error:
+        code: CODE_INTERNAL
+  - request:
+      # \x02\x00\x00\x00\x02{}\x02\x00\x00\x00\x02{}: two EndStreamResponses.
+      testName: two-end-streams
+      streamType: STREAM_TYPE_SERVER_STREAM
+      requestMessages:
+        - "@type": type.googleapis.com/connectrpc.conformance.v1.ServerStreamRequest
+          responseDefinition:
+            rawResponse:
+              headers:
+                - name: content-type
+                  value: [ "application/connect+json" ]
+              unary:
+                binary: "AgAAAAJ7fQIAAAACe30="
+    expectedResponse:
+      error:
+        code: CODE_INTERNAL
+  - request:
+      # \x02\x00\x00\x00\x02{}\x00\x00: two bytes after the EndStreamResponse.
+      testName: trailing-bytes
+      streamType: STREAM_TYPE_SERVER_STREAM
+      requestMessages:
+        - "@type": type.googleapis.com/connectrpc.conformance.v1.ServerStreamRequest
+          responseDefinition:
+            rawResponse:
+              headers:
+                - name: content-type
+                  value: [ "application/connect+json" ]
+              unary:
+                binary: "AgAAAAJ7fQAA"
+    expectedResponse:
+      error:
+        code: CODE_INTERNAL
+  - request:
+      # Two data messages, then an EndStreamResponse, for a client-stream RPC.
+      testName: client-stream/two-responses
+      streamType: STREAM_TYPE_CLIENT_STREAM
+      requestMessages:
+        - "@type": type.googleapis.com/connectrpc.conformance.v1.ClientStreamRequest
+          responseDefinition:
+            rawResponse:
+              headers:
+                - name: content-type
+                  value: [ "application/connect+json" ]
+              unary:
+                binary: "AAAAAAJ7fQAAAAACe30CAAAAAnt9"
+    expectedResponse:
+      error:
+        code: CODE_UNIMPLEMENTED
+  - request:
+      # Only an EndStreamResponse, for a client-stream RPC.
+      testName: client-stream/no-response
+      streamType: STREAM_TYPE_CLIENT_STREAM
+      requestMessages:
+        - "@type": type.googleapis.com/connectrpc.conformance.v1.ClientStreamRequest
+          responseDefinition:
+            rawResponse:
+              headers:
+                - name: content-type
+                  value: [ "application/connect+json" ]
+              unary:
+                binary: "AgAAAAJ7fQ=="
+    expectedResponse:
+      error:
+        code: CODE_UNIMPLEMENTED

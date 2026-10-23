@@ -1,0 +1,53 @@
+name: Connect Server Rule Violations
+mode: TEST_MODE_CLIENT
+relevantProtocols:
+  - PROTOCOL_CONNECT
+relevantCompressions:
+  - COMPRESSION_IDENTITY
+relevantCodecs:
+  - CODEC_PROTO
+# Each case breaks a rule the Connect protocol reference states for servers
+# while staying parsable by a client. The first expects the body's code, since
+# the spec says the code comes from the body whenever it is a well-formed Error.
+# The second expects a plain success: the protocol does not use HTTP trailers,
+# so whether a client exposes one is unspecified. A third rule, a success body
+# whose codec differs from the request's, is already the unexpected-codec case
+# in connect_client_unexpected.yaml.
+testCases:
+  - request:
+      testName: error-code-status-mismatch
+      streamType: STREAM_TYPE_UNARY
+      requestMessages:
+        - "@type": type.googleapis.com/connectrpc.conformance.v1.UnaryRequest
+          responseDefinition:
+            rawResponse:
+              statusCode: 503
+              headers:
+                - name: content-type
+                  value: [ "application/json" ]
+              unary:
+                text: '{"code":"not_found"}'
+    expectedResponse:
+      error:
+        code: CODE_NOT_FOUND
+  - request:
+      testName: http-trailers
+      streamType: STREAM_TYPE_UNARY
+      requestMessages:
+        - "@type": type.googleapis.com/connectrpc.conformance.v1.UnaryRequest
+          responseDefinition:
+            rawResponse:
+              headers:
+                - name: content-type
+                  value: [ "application/proto" ]
+              unary:
+                binary_message:
+                  "@type": "type.googleapis.com/connectrpc.conformance.v1.UnaryResponse"
+                  payload:
+                    data: "dGVzdCByZXNwb25zZQ"
+              trailers:
+                - name: acme-cost
+                  value: [ "1" ]
+    expectedResponse:
+      payloads:
+        - data: "dGVzdCByZXNwb25zZQ"
