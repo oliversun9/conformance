@@ -323,22 +323,9 @@ testCases:
   # Connect protocol reference describes only from the server's side. The spec
   # gives the client no rule for any of them, so each expectation is a
   # placeholder: a success carrying the payload. A client that fails instead
-  # reports its actual code and message in the runner output.
-  - request:
-      testName: missing-content-type
-      streamType: STREAM_TYPE_UNARY
-      requestMessages:
-        - "@type": type.googleapis.com/connectrpc.conformance.v1.UnaryRequest
-          responseDefinition:
-            rawResponse:
-              unary:
-                binary_message:
-                  "@type": "type.googleapis.com/connectrpc.conformance.v1.UnaryResponse"
-                  payload:
-                    data: "dGVzdCByZXNwb25zZQ"
-    expectedResponse:
-      payloads:
-        - data: "dGVzdCByZXNwb25zZQ"
+  # reports its actual code and message in the runner output. A response with no
+  # content-type at all is not among them: the Go reference server's net/http
+  # sniffs one (application/octet-stream) whenever none is set.
   - request:
       testName: content-type-parameters
       streamType: STREAM_TYPE_UNARY
