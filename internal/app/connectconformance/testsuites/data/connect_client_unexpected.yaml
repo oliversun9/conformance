@@ -318,3 +318,142 @@ testCases:
         - { }
       error:
         code: CODE_INTERNAL
+
+  # The cases below send a well-formed unary response body under a header the
+  # Connect protocol reference describes only from the server's side. The spec
+  # gives the client no rule for any of them, so each expectation is a
+  # placeholder: a success carrying the payload. A client that fails instead
+  # reports its actual code and message in the runner output.
+  - request:
+      testName: missing-content-type
+      streamType: STREAM_TYPE_UNARY
+      requestMessages:
+        - "@type": type.googleapis.com/connectrpc.conformance.v1.UnaryRequest
+          responseDefinition:
+            rawResponse:
+              unary:
+                binary_message:
+                  "@type": "type.googleapis.com/connectrpc.conformance.v1.UnaryResponse"
+                  payload:
+                    data: "dGVzdCByZXNwb25zZQ"
+    expectedResponse:
+      payloads:
+        - data: "dGVzdCByZXNwb25zZQ"
+  - request:
+      testName: content-type-parameters
+      streamType: STREAM_TYPE_UNARY
+      requestMessages:
+        - "@type": type.googleapis.com/connectrpc.conformance.v1.UnaryRequest
+          responseDefinition:
+            rawResponse:
+              headers:
+                - name: content-type
+                  value: [ "application/proto; charset=utf-8" ]
+              unary:
+                binary_message:
+                  "@type": "type.googleapis.com/connectrpc.conformance.v1.UnaryResponse"
+                  payload:
+                    data: "dGVzdCByZXNwb25zZQ"
+    expectedResponse:
+      payloads:
+        - data: "dGVzdCByZXNwb25zZQ"
+  - request:
+      testName: binary-header-bad-base64
+      streamType: STREAM_TYPE_UNARY
+      requestMessages:
+        - "@type": type.googleapis.com/connectrpc.conformance.v1.UnaryRequest
+          responseDefinition:
+            rawResponse:
+              headers:
+                - name: content-type
+                  value: [ "application/proto" ]
+                - name: acme-token-bin
+                  value: [ "invalid@" ]
+              unary:
+                binary_message:
+                  "@type": "type.googleapis.com/connectrpc.conformance.v1.UnaryResponse"
+                  payload:
+                    data: "dGVzdCByZXNwb25zZQ"
+    expectedResponse:
+      payloads:
+        - data: "dGVzdCByZXNwb25zZQ"
+  - request:
+      testName: header-non-ascii-value
+      streamType: STREAM_TYPE_UNARY
+      requestMessages:
+        - "@type": type.googleapis.com/connectrpc.conformance.v1.UnaryRequest
+          responseDefinition:
+            rawResponse:
+              headers:
+                - name: content-type
+                  value: [ "application/proto" ]
+                - name: acme-note
+                  value: [ "café" ]
+              unary:
+                binary_message:
+                  "@type": "type.googleapis.com/connectrpc.conformance.v1.UnaryResponse"
+                  payload:
+                    data: "dGVzdCByZXNwb25zZQ"
+    expectedResponse:
+      payloads:
+        - data: "dGVzdCByZXNwb25zZQ"
+  - request:
+      testName: header-invalid-name
+      streamType: STREAM_TYPE_UNARY
+      requestMessages:
+        - "@type": type.googleapis.com/connectrpc.conformance.v1.UnaryRequest
+          responseDefinition:
+            rawResponse:
+              headers:
+                - name: content-type
+                  value: [ "application/proto" ]
+                - name: "acme_note!"
+                  value: [ "1" ]
+              unary:
+                binary_message:
+                  "@type": "type.googleapis.com/connectrpc.conformance.v1.UnaryResponse"
+                  payload:
+                    data: "dGVzdCByZXNwb25zZQ"
+    expectedResponse:
+      payloads:
+        - data: "dGVzdCByZXNwb25zZQ"
+  - request:
+      testName: reserved-header
+      streamType: STREAM_TYPE_UNARY
+      requestMessages:
+        - "@type": type.googleapis.com/connectrpc.conformance.v1.UnaryRequest
+          responseDefinition:
+            rawResponse:
+              headers:
+                - name: content-type
+                  value: [ "application/proto" ]
+                - name: connect-foo
+                  value: [ "bar" ]
+              unary:
+                binary_message:
+                  "@type": "type.googleapis.com/connectrpc.conformance.v1.UnaryResponse"
+                  payload:
+                    data: "dGVzdCByZXNwb25zZQ"
+    expectedResponse:
+      payloads:
+        - data: "dGVzdCByZXNwb25zZQ"
+  - request:
+      testName: bare-trailer-prefix
+      streamType: STREAM_TYPE_UNARY
+      requestMessages:
+        - "@type": type.googleapis.com/connectrpc.conformance.v1.UnaryRequest
+          responseDefinition:
+            rawResponse:
+              headers:
+                - name: content-type
+                  value: [ "application/proto" ]
+                - name: trailer-
+                  value: [ "x" ]
+              unary:
+                binary_message:
+                  "@type": "type.googleapis.com/connectrpc.conformance.v1.UnaryResponse"
+                  payload:
+                    data: "dGVzdCByZXNwb25zZQ"
+    expectedResponse:
+      payloads:
+        - data: "dGVzdCByZXNwb25zZQ"
