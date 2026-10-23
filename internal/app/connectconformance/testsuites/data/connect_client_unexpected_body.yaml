@@ -1,0 +1,369 @@
+name: Connect Unexpected Unary Bodies
+mode: TEST_MODE_CLIENT
+relevantProtocols:
+  - PROTOCOL_CONNECT
+relevantCompressions:
+  - COMPRESSION_IDENTITY
+# The two success-status cases need a JSON request so that a JSON response
+# body reaches the message decoder instead of failing the content-type check.
+# The error cases are codec-independent: a Connect error body is always JSON.
+relevantCodecs:
+  - CODEC_JSON
+testCases:
+  # The first two cases send status 200 with content-type application/json and
+  # a body that is not the response message. The Connect protocol reference
+  # gives the client no rule for either, so each expectation is a placeholder:
+  # INTERNAL, the code the reference client reports for a body it cannot
+  # decode. A client that reports another code, or a success, shows its actual
+  # result in the runner output.
+  - request:
+      testName: empty-json-body
+      streamType: STREAM_TYPE_UNARY
+      requestMessages:
+        - "@type": type.googleapis.com/connectrpc.conformance.v1.UnaryRequest
+          responseDefinition:
+            rawResponse:
+              headers:
+                - name: content-type
+                  value: [ "application/json" ]
+    expectedResponse:
+      error:
+        code: CODE_INTERNAL
+  - request:
+      testName: 200-error-body
+      streamType: STREAM_TYPE_UNARY
+      requestMessages:
+        - "@type": type.googleapis.com/connectrpc.conformance.v1.UnaryRequest
+          responseDefinition:
+            rawResponse:
+              headers:
+                - name: content-type
+                  value: [ "application/json" ]
+              unary:
+                text: '{"code":"not_found","message":"x"}'
+    expectedResponse:
+      error:
+        code: CODE_INTERNAL
+
+  # The next two cases send status 503 with content-type application/json and
+  # a body that is not a JSON object. The spec says the client infers the code
+  # from the HTTP status when the body is missing or malformed, and the
+  # HTTP-to-code table maps 503 to UNAVAILABLE.
+  - request:
+      testName: error-not-json
+      streamType: STREAM_TYPE_UNARY
+      requestMessages:
+        - "@type": type.googleapis.com/connectrpc.conformance.v1.UnaryRequest
+          responseDefinition:
+            rawResponse:
+              statusCode: 503
+              headers:
+                - name: content-type
+                  value: [ "application/json" ]
+              unary:
+                text: '<html>'
+    expectedResponse:
+      error:
+        code: CODE_UNAVAILABLE
+  - request:
+      testName: error-json-not-object
+      streamType: STREAM_TYPE_UNARY
+      requestMessages:
+        - "@type": type.googleapis.com/connectrpc.conformance.v1.UnaryRequest
+          responseDefinition:
+            rawResponse:
+              statusCode: 503
+              headers:
+                - name: content-type
+                  value: [ "application/json" ]
+              unary:
+                text: '[]'
+    expectedResponse:
+      error:
+        code: CODE_UNAVAILABLE
+
+  # The remaining cases send status 404 with content-type application/json and
+  # a JSON object that breaks one rule of the Error object. Status 404 was
+  # chosen because the three possible outcomes are then distinguishable: a
+  # client that infers the code from the status (the spec's rule for a
+  # malformed body) reports UNIMPLEMENTED, the HTTP-to-code mapping for 404; a
+  # client that keeps the body's code reports NOT_FOUND; and a client that
+  # reports the parse failure itself reports its own code. Each case whose body
+  # breaks the Error schema expects UNIMPLEMENTED. The two cases whose detail
+  # satisfies the schema but cannot be decoded (an unknown type, and bytes that
+  # are not a valid message) expect NOT_FOUND, since the spec gives no rule for
+  # them and the Error object itself is well-formed. No case lists expected
+  # details, and the runner compares the number of details, so a client that
+  # keeps an undecodable detail reports a count mismatch in the runner output.
+  - request:
+      testName: error-empty-object
+      streamType: STREAM_TYPE_UNARY
+      requestMessages:
+        - "@type": type.googleapis.com/connectrpc.conformance.v1.UnaryRequest
+          responseDefinition:
+            rawResponse:
+              statusCode: 404
+              headers:
+                - name: content-type
+                  value: [ "application/json" ]
+              unary:
+                text: '{}'
+    expectedResponse:
+      error:
+        code: CODE_UNIMPLEMENTED
+  - request:
+      testName: error-null-code
+      streamType: STREAM_TYPE_UNARY
+      requestMessages:
+        - "@type": type.googleapis.com/connectrpc.conformance.v1.UnaryRequest
+          responseDefinition:
+            rawResponse:
+              statusCode: 404
+              headers:
+                - name: content-type
+                  value: [ "application/json" ]
+              unary:
+                text: '{"code": null}'
+    expectedResponse:
+      error:
+        code: CODE_UNIMPLEMENTED
+  - request:
+      testName: error-code-not-string
+      streamType: STREAM_TYPE_UNARY
+      requestMessages:
+        - "@type": type.googleapis.com/connectrpc.conformance.v1.UnaryRequest
+          responseDefinition:
+            rawResponse:
+              statusCode: 404
+              headers:
+                - name: content-type
+                  value: [ "application/json" ]
+              unary:
+                text: '{"code": 5}'
+    expectedResponse:
+      error:
+        code: CODE_UNIMPLEMENTED
+  - request:
+      testName: error-unknown-code
+      streamType: STREAM_TYPE_UNARY
+      requestMessages:
+        - "@type": type.googleapis.com/connectrpc.conformance.v1.UnaryRequest
+          responseDefinition:
+            rawResponse:
+              statusCode: 404
+              headers:
+                - name: content-type
+                  value: [ "application/json" ]
+              unary:
+                text: '{"code": "teapot"}'
+    expectedResponse:
+      error:
+        code: CODE_UNIMPLEMENTED
+  - request:
+      testName: error-code-wrong-case
+      streamType: STREAM_TYPE_UNARY
+      requestMessages:
+        - "@type": type.googleapis.com/connectrpc.conformance.v1.UnaryRequest
+          responseDefinition:
+            rawResponse:
+              statusCode: 404
+              headers:
+                - name: content-type
+                  value: [ "application/json" ]
+              unary:
+                text: '{"code": "NOT_FOUND"}'
+    expectedResponse:
+      error:
+        code: CODE_UNIMPLEMENTED
+  - request:
+      testName: error-message-not-string
+      streamType: STREAM_TYPE_UNARY
+      requestMessages:
+        - "@type": type.googleapis.com/connectrpc.conformance.v1.UnaryRequest
+          responseDefinition:
+            rawResponse:
+              statusCode: 404
+              headers:
+                - name: content-type
+                  value: [ "application/json" ]
+              unary:
+                text: '{"code":"not_found","message": 5}'
+    expectedResponse:
+      error:
+        code: CODE_UNIMPLEMENTED
+  - request:
+      testName: error-details-not-array
+      streamType: STREAM_TYPE_UNARY
+      requestMessages:
+        - "@type": type.googleapis.com/connectrpc.conformance.v1.UnaryRequest
+          responseDefinition:
+            rawResponse:
+              statusCode: 404
+              headers:
+                - name: content-type
+                  value: [ "application/json" ]
+              unary:
+                text: '{"code":"not_found","details": {}}'
+    expectedResponse:
+      error:
+        code: CODE_UNIMPLEMENTED
+  - request:
+      testName: error-details-null
+      streamType: STREAM_TYPE_UNARY
+      requestMessages:
+        - "@type": type.googleapis.com/connectrpc.conformance.v1.UnaryRequest
+          responseDefinition:
+            rawResponse:
+              statusCode: 404
+              headers:
+                - name: content-type
+                  value: [ "application/json" ]
+              unary:
+                text: '{"code":"not_found","details": null}'
+    expectedResponse:
+      error:
+        code: CODE_UNIMPLEMENTED
+  - request:
+      testName: error-detail-not-object
+      streamType: STREAM_TYPE_UNARY
+      requestMessages:
+        - "@type": type.googleapis.com/connectrpc.conformance.v1.UnaryRequest
+          responseDefinition:
+            rawResponse:
+              statusCode: 404
+              headers:
+                - name: content-type
+                  value: [ "application/json" ]
+              unary:
+                text: '{"code":"not_found","details": ["x"]}'
+    expectedResponse:
+      error:
+        code: CODE_UNIMPLEMENTED
+  - request:
+      testName: error-detail-missing-type
+      streamType: STREAM_TYPE_UNARY
+      requestMessages:
+        - "@type": type.googleapis.com/connectrpc.conformance.v1.UnaryRequest
+          responseDefinition:
+            rawResponse:
+              statusCode: 404
+              headers:
+                - name: content-type
+                  value: [ "application/json" ]
+              unary:
+                text: '{"code":"not_found","details": [{"value": "CgIIPA"}]}'
+    expectedResponse:
+      error:
+        code: CODE_UNIMPLEMENTED
+  - request:
+      testName: error-detail-type-not-string
+      streamType: STREAM_TYPE_UNARY
+      requestMessages:
+        - "@type": type.googleapis.com/connectrpc.conformance.v1.UnaryRequest
+          responseDefinition:
+            rawResponse:
+              statusCode: 404
+              headers:
+                - name: content-type
+                  value: [ "application/json" ]
+              unary:
+                text: '{"code":"not_found","details": [{"type": 5, "value": "CgIIPA"}]}'
+    expectedResponse:
+      error:
+        code: CODE_UNIMPLEMENTED
+  - request:
+      testName: error-detail-unknown-type
+      streamType: STREAM_TYPE_UNARY
+      requestMessages:
+        - "@type": type.googleapis.com/connectrpc.conformance.v1.UnaryRequest
+          responseDefinition:
+            rawResponse:
+              statusCode: 404
+              headers:
+                - name: content-type
+                  value: [ "application/json" ]
+              unary:
+                text: '{"code":"not_found","details": [{"type": "acme.v1.Missing", "value": "CgIIPA"}]}'
+    expectedResponse:
+      error:
+        code: CODE_NOT_FOUND
+  - request:
+      testName: error-detail-missing-value
+      streamType: STREAM_TYPE_UNARY
+      requestMessages:
+        - "@type": type.googleapis.com/connectrpc.conformance.v1.UnaryRequest
+          responseDefinition:
+            rawResponse:
+              statusCode: 404
+              headers:
+                - name: content-type
+                  value: [ "application/json" ]
+              unary:
+                text: '{"code":"not_found","details": [{"type": "google.rpc.RetryInfo"}]}'
+    expectedResponse:
+      error:
+        code: CODE_UNIMPLEMENTED
+  - request:
+      testName: error-detail-value-not-string
+      streamType: STREAM_TYPE_UNARY
+      requestMessages:
+        - "@type": type.googleapis.com/connectrpc.conformance.v1.UnaryRequest
+          responseDefinition:
+            rawResponse:
+              statusCode: 404
+              headers:
+                - name: content-type
+                  value: [ "application/json" ]
+              unary:
+                text: '{"code":"not_found","details": [{"type": "google.rpc.RetryInfo", "value": 5}]}'
+    expectedResponse:
+      error:
+        code: CODE_UNIMPLEMENTED
+  - request:
+      testName: error-detail-value-bad-base64
+      streamType: STREAM_TYPE_UNARY
+      requestMessages:
+        - "@type": type.googleapis.com/connectrpc.conformance.v1.UnaryRequest
+          responseDefinition:
+            rawResponse:
+              statusCode: 404
+              headers:
+                - name: content-type
+                  value: [ "application/json" ]
+              unary:
+                text: '{"code":"not_found","details": [{"type": "google.rpc.RetryInfo", "value": "invalid@"}]}'
+    expectedResponse:
+      error:
+        code: CODE_UNIMPLEMENTED
+  - request:
+      testName: error-detail-value-padded
+      streamType: STREAM_TYPE_UNARY
+      requestMessages:
+        - "@type": type.googleapis.com/connectrpc.conformance.v1.UnaryRequest
+          responseDefinition:
+            rawResponse:
+              statusCode: 404
+              headers:
+                - name: content-type
+                  value: [ "application/json" ]
+              unary:
+                text: '{"code":"not_found","details": [{"type": "google.rpc.RetryInfo", "value": "CgIIPA=="}]}'
+    expectedResponse:
+      error:
+        code: CODE_UNIMPLEMENTED
+  - request:
+      testName: error-detail-value-bad-proto
+      streamType: STREAM_TYPE_UNARY
+      requestMessages:
+        - "@type": type.googleapis.com/connectrpc.conformance.v1.UnaryRequest
+          responseDefinition:
+            rawResponse:
+              statusCode: 404
+              headers:
+                - name: content-type
+                  value: [ "application/json" ]
+              unary:
+                text: '{"code":"not_found","details": [{"type": "google.rpc.RetryInfo", "value": "AA"}]}'
+    expectedResponse:
+      error:
+        code: CODE_NOT_FOUND
