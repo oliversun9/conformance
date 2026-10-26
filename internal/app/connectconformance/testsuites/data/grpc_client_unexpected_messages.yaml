@@ -1,0 +1,227 @@
+name: gRPC Unexpected Response Messages
+mode: TEST_MODE_CLIENT
+relevantProtocols:
+  - PROTOCOL_GRPC
+relevantCompressions:
+  - COMPRESSION_IDENTITY
+relevantCodecs:
+  - CODEC_PROTO
+# Each case sends a unary response with valid headers (content-type
+# application/grpc) and valid trailers (grpc-status 0) whose
+# Length-Prefixed-Message framing or message count breaks one rule of the
+# gRPC over HTTP/2 protocol. The gRPC status code document names INTERNAL for
+# a message that cannot be decompressed or parsed and UNIMPLEMENTED for a
+# unary response with other than one message; the remaining expectations are
+# placeholders: INTERNAL, the code the reference client reports for a framing
+# error.
+testCases:
+  - request:
+      # Compressed flag set, no grpc-encoding header.
+      testName: compressed-flag-no-encoding
+      streamType: STREAM_TYPE_UNARY
+      requestMessages:
+        - "@type": type.googleapis.com/connectrpc.conformance.v1.UnaryRequest
+          responseDefinition:
+            rawResponse:
+              headers:
+                - name: content-type
+                  value: [ "application/grpc" ]
+              stream:
+                items:
+                  - flags: 1
+                    payload:
+                      binary_message:
+                        "@type": "type.googleapis.com/connectrpc.conformance.v1.UnaryResponse"
+                        payload:
+                          data: "dGVzdCByZXNwb25zZQ"
+                      compression: COMPRESSION_GZIP
+              trailers:
+                - name: grpc-status
+                  value: [ "0" ]
+    expectedResponse:
+      error:
+        code: CODE_INTERNAL
+  - request:
+      # Compressed flag set under grpc-encoding identity, with plain bytes.
+      testName: compressed-flag-identity
+      streamType: STREAM_TYPE_UNARY
+      requestMessages:
+        - "@type": type.googleapis.com/connectrpc.conformance.v1.UnaryRequest
+          responseDefinition:
+            rawResponse:
+              headers:
+                - name: content-type
+                  value: [ "application/grpc" ]
+                - name: grpc-encoding
+                  value: [ "identity" ]
+              stream:
+                items:
+                  - flags: 1
+                    payload:
+                      binary_message:
+                        "@type": "type.googleapis.com/connectrpc.conformance.v1.UnaryResponse"
+                        payload:
+                          data: "dGVzdCByZXNwb25zZQ"
+              trailers:
+                - name: grpc-status
+                  value: [ "0" ]
+    expectedResponse:
+      error:
+        code: CODE_INTERNAL
+  - request:
+      # Flag byte 2: a bit the protocol does not define.
+      testName: reserved-flag
+      streamType: STREAM_TYPE_UNARY
+      requestMessages:
+        - "@type": type.googleapis.com/connectrpc.conformance.v1.UnaryRequest
+          responseDefinition:
+            rawResponse:
+              headers:
+                - name: content-type
+                  value: [ "application/grpc" ]
+              stream:
+                items:
+                  - flags: 2
+                    payload:
+                      binary_message:
+                        "@type": "type.googleapis.com/connectrpc.conformance.v1.UnaryResponse"
+                        payload:
+                          data: "dGVzdCByZXNwb25zZQ"
+              trailers:
+                - name: grpc-status
+                  value: [ "0" ]
+    expectedResponse:
+      error:
+        code: CODE_INTERNAL
+  - request:
+      # Flag byte 128: the gRPC-Web trailer bit, undefined in gRPC.
+      testName: grpc-web-trailer-flag
+      streamType: STREAM_TYPE_UNARY
+      requestMessages:
+        - "@type": type.googleapis.com/connectrpc.conformance.v1.UnaryRequest
+          responseDefinition:
+            rawResponse:
+              headers:
+                - name: content-type
+                  value: [ "application/grpc" ]
+              stream:
+                items:
+                  - flags: 128
+                    payload:
+                      binary_message:
+                        "@type": "type.googleapis.com/connectrpc.conformance.v1.UnaryResponse"
+                        payload:
+                          data: "dGVzdCByZXNwb25zZQ"
+              trailers:
+                - name: grpc-status
+                  value: [ "0" ]
+    expectedResponse:
+      error:
+        code: CODE_INTERNAL
+  - request:
+      # \x00\x00\x00: three of the five prefix bytes, then the trailers.
+      testName: truncated-prefix
+      streamType: STREAM_TYPE_UNARY
+      requestMessages:
+        - "@type": type.googleapis.com/connectrpc.conformance.v1.UnaryRequest
+          responseDefinition:
+            rawResponse:
+              headers:
+                - name: content-type
+                  value: [ "application/grpc" ]
+              unary:
+                binary: "AAAA"
+              trailers:
+                - name: grpc-status
+                  value: [ "0" ]
+    expectedResponse:
+      error:
+        code: CODE_INTERNAL
+  - request:
+      # \x00\x00\x00\x00\x64abcdefghijkl: 12 of the promised 100 bytes, then
+      # the trailers.
+      testName: truncated-message
+      streamType: STREAM_TYPE_UNARY
+      requestMessages:
+        - "@type": type.googleapis.com/connectrpc.conformance.v1.UnaryRequest
+          responseDefinition:
+            rawResponse:
+              headers:
+                - name: content-type
+                  value: [ "application/grpc" ]
+              unary:
+                binary: "AAAAAGRhYmNkZWZnaGlqa2w="
+              trailers:
+                - name: grpc-status
+                  value: [ "0" ]
+    expectedResponse:
+      error:
+        code: CODE_INTERNAL
+  - request:
+      # Message bytes \xff\xff\xff\xff, which are not a valid message.
+      testName: undecodable-message
+      streamType: STREAM_TYPE_UNARY
+      requestMessages:
+        - "@type": type.googleapis.com/connectrpc.conformance.v1.UnaryRequest
+          responseDefinition:
+            rawResponse:
+              headers:
+                - name: content-type
+                  value: [ "application/grpc" ]
+              stream:
+                items:
+                  - flags: 0
+                    payload:
+                      binary: "/////w=="
+              trailers:
+                - name: grpc-status
+                  value: [ "0" ]
+    expectedResponse:
+      error:
+        code: CODE_INTERNAL
+  - request:
+      testName: zero-messages
+      streamType: STREAM_TYPE_UNARY
+      requestMessages:
+        - "@type": type.googleapis.com/connectrpc.conformance.v1.UnaryRequest
+          responseDefinition:
+            rawResponse:
+              headers:
+                - name: content-type
+                  value: [ "application/grpc" ]
+              trailers:
+                - name: grpc-status
+                  value: [ "0" ]
+    expectedResponse:
+      error:
+        code: CODE_UNIMPLEMENTED
+  - request:
+      testName: two-messages
+      streamType: STREAM_TYPE_UNARY
+      requestMessages:
+        - "@type": type.googleapis.com/connectrpc.conformance.v1.UnaryRequest
+          responseDefinition:
+            rawResponse:
+              headers:
+                - name: content-type
+                  value: [ "application/grpc" ]
+              stream:
+                items:
+                  - flags: 0
+                    payload:
+                      binary_message:
+                        "@type": "type.googleapis.com/connectrpc.conformance.v1.UnaryResponse"
+                        payload:
+                          data: "dGVzdCByZXNwb25zZQ"
+                  - flags: 0
+                    payload:
+                      binary_message:
+                        "@type": "type.googleapis.com/connectrpc.conformance.v1.UnaryResponse"
+                        payload:
+                          data: "dGVzdCByZXNwb25zZQ"
+              trailers:
+                - name: grpc-status
+                  value: [ "0" ]
+    expectedResponse:
+      error:
+        code: CODE_UNIMPLEMENTED

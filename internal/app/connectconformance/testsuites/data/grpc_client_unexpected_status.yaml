@@ -1,0 +1,311 @@
+name: gRPC Unexpected Status
+mode: TEST_MODE_CLIENT
+relevantProtocols:
+  - PROTOCOL_GRPC
+relevantCompressions:
+  - COMPRESSION_IDENTITY
+relevantCodecs:
+  - CODEC_PROTO
+# Each case sends a unary response with valid headers (content-type
+# application/grpc) and one valid message whose trailers break one rule of the
+# gRPC over HTTP/2 protocol. The spec tells clients to synthesize a status when
+# grpc-status is missing and the status code document names UNKNOWN for a
+# status that cannot be parsed, so those cases expect UNKNOWN (INTERNAL for no
+# trailers at all, as the existing no-terminal-status cases expect). Where the
+# trailers carry a parsable grpc-status next to a malformed grpc-message or
+# grpc-status-details-bin, the expectation is that status, since the spec says
+# a client must not fail on an undecodable message and gives no rule for
+# undecodable details. The remaining expectations are placeholders.
+testCases:
+  - request:
+      testName: no-trailers
+      streamType: STREAM_TYPE_UNARY
+      requestMessages:
+        - "@type": type.googleapis.com/connectrpc.conformance.v1.UnaryRequest
+          responseDefinition:
+            rawResponse:
+              headers:
+                - name: content-type
+                  value: [ "application/grpc" ]
+              stream:
+                items:
+                  - flags: 0
+                    payload:
+                      binary_message:
+                        "@type": "type.googleapis.com/connectrpc.conformance.v1.UnaryResponse"
+                        payload:
+                          data: "dGVzdCByZXNwb25zZQ"
+    expectedResponse:
+      error:
+        code: CODE_INTERNAL
+  - request:
+      testName: trailers-without-status
+      streamType: STREAM_TYPE_UNARY
+      requestMessages:
+        - "@type": type.googleapis.com/connectrpc.conformance.v1.UnaryRequest
+          responseDefinition:
+            rawResponse:
+              headers:
+                - name: content-type
+                  value: [ "application/grpc" ]
+              stream:
+                items:
+                  - flags: 0
+                    payload:
+                      binary_message:
+                        "@type": "type.googleapis.com/connectrpc.conformance.v1.UnaryResponse"
+                        payload:
+                          data: "dGVzdCByZXNwb25zZQ"
+              trailers:
+                - name: grpc-message
+                  value: [ "error" ]
+    expectedResponse:
+      error:
+        code: CODE_UNKNOWN
+  - request:
+      testName: status-not-number
+      streamType: STREAM_TYPE_UNARY
+      requestMessages:
+        - "@type": type.googleapis.com/connectrpc.conformance.v1.UnaryRequest
+          responseDefinition:
+            rawResponse:
+              headers:
+                - name: content-type
+                  value: [ "application/grpc" ]
+              stream:
+                items:
+                  - flags: 0
+                    payload:
+                      binary_message:
+                        "@type": "type.googleapis.com/connectrpc.conformance.v1.UnaryResponse"
+                        payload:
+                          data: "dGVzdCByZXNwb25zZQ"
+              trailers:
+                - name: grpc-status
+                  value: [ "invalid" ]
+    expectedResponse:
+      error:
+        code: CODE_UNKNOWN
+  - request:
+      testName: status-out-of-range
+      streamType: STREAM_TYPE_UNARY
+      requestMessages:
+        - "@type": type.googleapis.com/connectrpc.conformance.v1.UnaryRequest
+          responseDefinition:
+            rawResponse:
+              headers:
+                - name: content-type
+                  value: [ "application/grpc" ]
+              stream:
+                items:
+                  - flags: 0
+                    payload:
+                      binary_message:
+                        "@type": "type.googleapis.com/connectrpc.conformance.v1.UnaryResponse"
+                        payload:
+                          data: "dGVzdCByZXNwb25zZQ"
+              trailers:
+                - name: grpc-status
+                  value: [ "99" ]
+    expectedResponse:
+      error:
+        code: CODE_UNKNOWN
+  - request:
+      testName: status-negative
+      streamType: STREAM_TYPE_UNARY
+      requestMessages:
+        - "@type": type.googleapis.com/connectrpc.conformance.v1.UnaryRequest
+          responseDefinition:
+            rawResponse:
+              headers:
+                - name: content-type
+                  value: [ "application/grpc" ]
+              stream:
+                items:
+                  - flags: 0
+                    payload:
+                      binary_message:
+                        "@type": "type.googleapis.com/connectrpc.conformance.v1.UnaryResponse"
+                        payload:
+                          data: "dGVzdCByZXNwb25zZQ"
+              trailers:
+                - name: grpc-status
+                  value: [ "-1" ]
+    expectedResponse:
+      error:
+        code: CODE_UNKNOWN
+  - request:
+      # The spec says the status has no leading zeros; 05 is NOT_FOUND if read
+      # as a number.
+      testName: status-leading-zero
+      streamType: STREAM_TYPE_UNARY
+      requestMessages:
+        - "@type": type.googleapis.com/connectrpc.conformance.v1.UnaryRequest
+          responseDefinition:
+            rawResponse:
+              headers:
+                - name: content-type
+                  value: [ "application/grpc" ]
+              stream:
+                items:
+                  - flags: 0
+                    payload:
+                      binary_message:
+                        "@type": "type.googleapis.com/connectrpc.conformance.v1.UnaryResponse"
+                        payload:
+                          data: "dGVzdCByZXNwb25zZQ"
+              trailers:
+                - name: grpc-status
+                  value: [ "05" ]
+    expectedResponse:
+      error:
+        code: CODE_NOT_FOUND
+  - request:
+      # grpc-status in both the headers and the trailers, with no body.
+      testName: status-in-headers-and-trailers
+      streamType: STREAM_TYPE_UNARY
+      requestMessages:
+        - "@type": type.googleapis.com/connectrpc.conformance.v1.UnaryRequest
+          responseDefinition:
+            rawResponse:
+              headers:
+                - name: content-type
+                  value: [ "application/grpc" ]
+                - name: grpc-status
+                  value: [ "8" ]
+              trailers:
+                - name: grpc-status
+                  value: [ "9" ]
+    expectedResponse:
+      error:
+        code: CODE_FAILED_PRECONDITION
+  - request:
+      testName: message-bad-percent
+      streamType: STREAM_TYPE_UNARY
+      requestMessages:
+        - "@type": type.googleapis.com/connectrpc.conformance.v1.UnaryRequest
+          responseDefinition:
+            rawResponse:
+              headers:
+                - name: content-type
+                  value: [ "application/grpc" ]
+              stream:
+                items:
+                  - flags: 0
+                    payload:
+                      binary_message:
+                        "@type": "type.googleapis.com/connectrpc.conformance.v1.UnaryResponse"
+                        payload:
+                          data: "dGVzdCByZXNwb25zZQ"
+              trailers:
+                - name: grpc-status
+                  value: [ "16" ]
+                - name: grpc-message
+                  value: [ "%" ]
+    expectedResponse:
+      error:
+        code: CODE_UNAUTHENTICATED
+  - request:
+      testName: details-bad-base64
+      streamType: STREAM_TYPE_UNARY
+      requestMessages:
+        - "@type": type.googleapis.com/connectrpc.conformance.v1.UnaryRequest
+          responseDefinition:
+            rawResponse:
+              headers:
+                - name: content-type
+                  value: [ "application/grpc" ]
+              stream:
+                items:
+                  - flags: 0
+                    payload:
+                      binary_message:
+                        "@type": "type.googleapis.com/connectrpc.conformance.v1.UnaryResponse"
+                        payload:
+                          data: "dGVzdCByZXNwb25zZQ"
+              trailers:
+                - name: grpc-status
+                  value: [ "16" ]
+                - name: grpc-status-details-bin
+                  value: [ "invalid@" ]
+    expectedResponse:
+      error:
+        code: CODE_UNAUTHENTICATED
+  - request:
+      # AA== decodes to one zero byte, which is not a valid google.rpc.Status.
+      testName: details-bad-proto
+      streamType: STREAM_TYPE_UNARY
+      requestMessages:
+        - "@type": type.googleapis.com/connectrpc.conformance.v1.UnaryRequest
+          responseDefinition:
+            rawResponse:
+              headers:
+                - name: content-type
+                  value: [ "application/grpc" ]
+              stream:
+                items:
+                  - flags: 0
+                    payload:
+                      binary_message:
+                        "@type": "type.googleapis.com/connectrpc.conformance.v1.UnaryResponse"
+                        payload:
+                          data: "dGVzdCByZXNwb25zZQ"
+              trailers:
+                - name: grpc-status
+                  value: [ "16" ]
+                - name: grpc-status-details-bin
+                  value: [ "AA==" ]
+    expectedResponse:
+      error:
+        code: CODE_UNAUTHENTICATED
+  - request:
+      # CAM= is google.rpc.Status{code: 3}, which contradicts grpc-status 16.
+      testName: details-code-mismatch
+      streamType: STREAM_TYPE_UNARY
+      requestMessages:
+        - "@type": type.googleapis.com/connectrpc.conformance.v1.UnaryRequest
+          responseDefinition:
+            rawResponse:
+              headers:
+                - name: content-type
+                  value: [ "application/grpc" ]
+              stream:
+                items:
+                  - flags: 0
+                    payload:
+                      binary_message:
+                        "@type": "type.googleapis.com/connectrpc.conformance.v1.UnaryResponse"
+                        payload:
+                          data: "dGVzdCByZXNwb25zZQ"
+              trailers:
+                - name: grpc-status
+                  value: [ "16" ]
+                - name: grpc-status-details-bin
+                  value: [ "CAM=" ]
+    expectedResponse:
+      error:
+        code: CODE_UNAUTHENTICATED
+  - request:
+      testName: duplicate-status
+      streamType: STREAM_TYPE_UNARY
+      requestMessages:
+        - "@type": type.googleapis.com/connectrpc.conformance.v1.UnaryRequest
+          responseDefinition:
+            rawResponse:
+              headers:
+                - name: content-type
+                  value: [ "application/grpc" ]
+              stream:
+                items:
+                  - flags: 0
+                    payload:
+                      binary_message:
+                        "@type": "type.googleapis.com/connectrpc.conformance.v1.UnaryResponse"
+                        payload:
+                          data: "dGVzdCByZXNwb25zZQ"
+              trailers:
+                - name: grpc-status
+                  value: [ "16", "0" ]
+    expectedResponse:
+      error:
+        code: CODE_UNAUTHENTICATED
